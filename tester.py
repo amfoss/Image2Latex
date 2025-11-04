@@ -3,11 +3,13 @@ import time
 import os
 from PIL import Image, ImageDraw, ImageFont
 from time import perf_counter
+from dotenv import load_dotenv 
 
+load_dotenv()
 # --- Server Configuration ---
-BASE_URL = "http://localhost:8000"
-UPLOAD_URL = f"{BASE_URL}/images/uploadfile/"
-RESULT_URL_BASE = f"{BASE_URL}/images/result/"
+BASE_URL = os.getenv("BASE_URL","")
+UPLOAD_URL = os.getenv("UPLOAD_URL","")
+RESULT_URL_BASE = os.getenv("RESULT_URL_BASE","")
 TEST_IMAGE_NAME = "image.png"
 
 def create_test_image():
