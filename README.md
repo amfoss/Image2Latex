@@ -44,7 +44,7 @@ You can change the host and ports , even on different machines , flask and zerom
 `git clone [https://github.com/Nova-Stark/am-latex.git](https://github.com/Nova-Stark/am-latex.git)`
 `cd am-latex`
 
-2. INstall Packages using uv 
+2. Install Packages using uv 
 `uv venv`
 `uv init`
 `uv add "flask" "flask-cors" "pix2tex[api]" python-dotenv pyzmq "redis[hiredis]" uvicorn`
