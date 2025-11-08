@@ -1,0 +1,16 @@
+[project]
+name = "latex"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.1.2",
+    "flask-cors>=6.0.1",
+    "gunicorn>=23.0.0",
+    "pix2tex[api]>=0.1.4",
+    "python-dotenv>=1.2.1",
+    "pyzmq>=27.1.0",
+    "redis[hiredis]>=7.0.1",
+    "setuptools>=80.9.0",
+]

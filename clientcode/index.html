@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to LaTeX (Flask Client)</title>
+    <style>
+        :root {
+            --bg-color: #2E2E2E;
+            --container-bg: #3A3A3A;
+            --text-color: #FFFFFF;
+            --text-muted: #AAAAAA;
+            --accent-color: #007ACC;
+            --border-color: #555555;
+            --error-color: #FF5555;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background-color: var(--container-bg);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            box-sizing: border-box;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-size: 2rem;
+        }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background-color: var(--bg-color);
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s ease;
+            cursor: pointer;
+        }
+
+        .drop-zone.drag-over {
+            background-color: #444;
+            border-color: var(--accent-color);
+        }
+
+        .drop-zone-text {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            pointer-events: none; 
+        }
+
+        .drop-zone-input {
+            display: none; 
+        }
+
+        #image-preview {
+            max-width: 100%;
+            max-height: 200px;
+            margin-top: 10px;
+            border-radius: 4px;
+            display: none; 
+        }
+
+        
+        .button-bar {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-browse {
+            background-color: #5A5A5A;
+            color: var(--text-color);
+        }
+        .btn-browse:hover {
+            background-color: #6A6A6A;
+        }
+
+        .btn-convert {
+            background-color: var(--accent-color);
+            color: var(--text-color);
+        }
+        .btn-convert:hover {
+            background-color: #0088dd;
+        }
+        .btn-convert:disabled {
+            background-color: #555;
+            color: #999;
+            cursor: not-allowed;
+        }
+
+       
+        .output-container {
+            margin-top: 20px;
+        }
+
+        label[for="output-text"] {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        #output-text {
+            width: 100%;
+            min-height: 100px;
+            box-sizing: border-box; 
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: "Courier New", Courier, monospace;
+            font-size: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            resize: vertical;
+        }
+
+        #output-text.error {
+            color: var(--error-color);
+        }
+
+        #output-text.pending {
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Image to LaTeX</h1>
+
+        <input type="file" id="file-input" class="drop-zone-input" accept="image/*">
+        
+        <div id="drop-zone" class="drop-zone">
+            
+            <span class="drop-zone-text">Drag & Drop, Paste (Ctrl+V) Image Here<br>or<br>Browse Files</span>
+            <img id="image-preview" alt="Image Preview">
+        </div>
+
+        <div class="button-bar">
+            <button id="browse-btn" class="btn btn-browse">Browse files</button>
+            <button id="convert-btn" class="btn btn-convert" disabled>Convert</button>
+        </div>
+
+        <div class="output-container">
+            <label for="output-text">LaTeX Output:</label>
+            <textarea id="output-text" readonly placeholder="Your LaTeX result will appear here..."></textarea>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration
+        // This configuration works for BOTH the FastAPI and Flask servers
+        // as they share the same port and URL structure.
+        const BASE_URL = "http://localhost:8000";
+        //const BASE_URL = "http://172.24.170.224:8000"; // Your original IP
+        const UPLOAD_URL = `${BASE_URL}/images/uploadfile/`;
+        const RESULT_URL_BASE = `${BASE_URL}/images/result/`;
+        const POLL_INTERVAL_MS = 2000; // 2 seconds
+       
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const browseBtn = document.getElementById('browse-btn');
+        const convertBtn = document.getElementById('convert-btn');
+        const outputText = document.getElementById('output-text');
+        const imagePreview = document.getElementById('image-preview');
+        const dropZoneText = document.querySelector('.drop-zone-text');
+
+        let selectedFile = null;
+
+
+        browseBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault(); 
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files; 
+                handleFile(files[0]);
+            }
+        });
+
+        dropZone.addEventListener('click', (e) => {
+            if (e.target.id !== 'image-preview') {
+                fileInput.click();
+            }
+        });
+
+        convertBtn.addEventListener('click', startConversion);
+
+        window.addEventListener('paste', (e) => {
+            e.preventDefault();
+            
+            const items = e.clipboardData?.items;
+            if (!items) {
+                return;
+            }
+
+            for (const item of items) {
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        handleFile(file);
+                        return; 
+                    }
+                }
+            }
+        });
+
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                updateOutput("Error: Please select an image file.", "error");
+                return;
+            }
+
+            selectedFile = file;
+            convertBtn.disabled = false;
+            updateOutput(`File selected: ${file.name}\nReady to convert.`, "pending");
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = 'block';
+                dropZoneText.style.display = 'none'; 
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateOutput(message, type = "") {
+            outputText.value = message;
+            outputText.classList.remove('error', 'pending');
+            if (type === "error") {
+                outputText.classList.add('error');
+            } else if (type === "pending") {
+                outputText.classList.add('pending');
+            }
+        }
+
+        function setUIBusy(isBusy) {
+            convertBtn.disabled = isBusy;
+            browseBtn.disabled = isBusy;
+            fileInput.disabled = isBusy;
+            dropZone.style.pointerEvents = isBusy ? 'none' : 'auto';
+            convertBtn.textContent = isBusy ? "Converting..." : "Convert";
+        }
+
+        async function startConversion() {
+            if (!selectedFile) {
+                updateOutput("Error: No file selected.", "error");
+                return;
+            }
+
+            setUIBusy(true);
+            updateOutput("Uploading image...", "pending");
+
+            const formData = new FormData();
+            formData.append("file", selectedFile);
+
+            try {
+                const response = await fetch(UPLOAD_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    
+                    throw new Error(errData.description || "Failed to upload file.");
+                }
+
+                const data = await response.json();
+                if (data.s !== "ok" || !data.id) {
+                    throw new Error("Server returned an invalid upload response.");
+                }
+
+                const taskId = data.id;
+                updateOutput(`Converting...\nTask ID: ${taskId}\n(Polling for result...)`, "pending");
+
+                pollForResult(taskId);
+
+            } catch (error) {
+                updateOutput(`Upload Error: ${error.message}`, "error");
+                setUIBusy(false);
+            }
+        }
+
+        function pollForResult(taskId) {
+            const resultUrl = `${RESULT_URL_BASE}${taskId}`;
+
+            const intervalId = setInterval(async () => {
+                try {
+                    const response = await fetch(resultUrl);
+
+                    if (response.status === 404) {
+                        console.log("Polling: ID not found yet.");
+                        return; // Keep polling
+                    }
+                    
+                    if (!response.ok) {
+                        throw new Error(`Server returned status ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    if (data.status === "pending") {
+                        return; // Keep polling
+                    }
+
+                    clearInterval(intervalId); 
+                    setUIBusy(false);
+
+                    if (data.status === "done") {
+                        updateOutput(data.result || "Conversion successful, but no text was returned.");
+                    } else if (data.status === "error") {
+                        updateOutput(`Conversion Failed: ${data.e || "Unknown processing error."}`, "error");
+                    } else {
+                        updateOutput(`Unknown status: ${data.status}`, "error");
+                    }
+
+                } catch (error) {
+                    clearInterval(intervalId);
+                    setUIBusy(false);
+                    updateOutput(`Polling Error: ${error.message}\nCould not get result.`, "error");
+                }
+            }, POLL_INTERVAL_MS);
+        }
+
+    </script>
+</body>
+</html>

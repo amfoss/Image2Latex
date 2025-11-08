@@ -1,24 +1,58 @@
-from flask import Flask, request, jsonify
-from PIL import Image
-from pix2tex.cli import LatexOCR
+import redis as sredis 
+import redis.exceptions 
+from flask import Flask, jsonify
 from flask_cors import CORS
-import io
+import os
+from dotenv import load_dotenv
+from RequestsHandle import routes_bp
+
+load_dotenv()
+
+INFO = bool(os.getenv("INFO"))
+NUM_WORKERS = int(os.getenv("NUM_WORKERS", 1)) 
+
+print("Flask application starting up...")
+
+try:
+
+    redis_con = sredis.Redis(decode_responses=True)
+    redis_con.ping()
+    if INFO:
+        print("[INFO] Connected to Redis at localhost:6379")
+        
+except redis.exceptions.ConnectionError:
+    print("[ERROR] Cannot connect to Redis server at localhost:6379!")
+    exit(1)
 
 app = Flask(__name__)
-CORS(app)  # allow requests from your standalone frontend
 
-model = LatexOCR()
 
-@app.route('/api/convert', methods=['POST'])
-def convert_image():
-    if 'image' not in request.files:
-        return jsonify({"error": "No image uploaded"}), 400
+app.config['REDIS_CONNECTION'] = redis_con
+app.config['INFO'] = INFO
 
-    uploaded_image = request.files['image']
-    image = Image.open(io.BytesIO(uploaded_image.read()))
-    latex_text = model(image)
+####################### CORS CONFIG
+origins = [
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "null",
+    "http://127.0.0.1:5000",
+    "http://172.24.160.1:5000",
+    "http://172.24.160.1:5500",
+    "http://localhost:8000"
+]
+CORS(app, resources={r"/*": {"origins": origins}}, supports_credentials=True)
 
-    return jsonify({"latex": latex_text})
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+app.register_blueprint(routes_bp, prefix="/images")
+
+@app.route("/")
+def root():
+    """
+    Root Endpoint
+    """
+    if app.config['INFO']:
+        print("[INFO] root initiated!")
+    return jsonify({
+        "message": "Image2Latex server is running. POST images to /images/uploadfile/"
+    })
+    

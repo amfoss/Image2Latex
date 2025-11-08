@@ -1,14 +1,15 @@
-FROM python:3.13-slim
+# Using latest python as base
+FROM python:latest
 
+# Set the workdir 
 WORKDIR /app
 
-COPY requirements.txt ./ 
+# Copying all files to image
+COPY ./ .
 
+
+# Install the required dependancies
 RUN pip install -r requirements.txt
 
-RUN python -c "from pix2tex.cli import LatexOCR; LatexOCR()"
-COPY . .
-
-EXPOSE 5000
-
-CMD ["flask", "run", "--host=0.0.0.0", "--port=5000"]
+# Start the container
+CMD ["flask", "run"]
